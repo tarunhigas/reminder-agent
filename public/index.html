@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reminder Agent</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">🗓</span>
+        <span class="logo-text">Reminder Agent</span>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-view="upcoming">📋 Upcoming</button>
+        <button class="nav-btn" data-view="all">📦 All Tasks</button>
+        <button class="nav-btn" data-view="audit">🔍 Audit</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="status-dot" id="daemonStatus" title="Reminder daemon status"></div>
+        <span id="daemonLabel">Daemon active</span>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- Header -->
+      <header class="topbar">
+        <h1 id="viewTitle">Upcoming Tasks</h1>
+        <button class="btn-primary" id="addTaskBtn">+ Add Task</button>
+      </header>
+
+      <!-- Clash banner -->
+      <div class="clash-banner hidden" id="clashBanner">
+        <span class="clash-icon">⚡</span>
+        <span id="clashBannerText"></span>
+        <button class="banner-close" id="clashBannerClose">✕</button>
+      </div>
+
+      <!-- Task list -->
+      <section class="task-list" id="taskList">
+        <div class="loading">Loading tasks…</div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Add Task Modal ─────────────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="addModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>New Task</h2>
+        <button class="modal-close" id="addModalClose">✕</button>
+      </div>
+      <form id="addTaskForm" novalidate>
+        <div class="form-group">
+          <label for="f-title">Title <span class="req">*</span></label>
+          <input type="text" id="f-title" placeholder="e.g. Team standup" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-date">Date <span class="req">*</span></label>
+            <input type="date" id="f-date" required />
+          </div>
+          <div class="form-group">
+            <label for="f-time">Start time <span class="req">*</span></label>
+            <input type="time" id="f-time" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-duration">Duration (min) <span class="req">*</span></label>
+            <input type="number" id="f-duration" value="30" min="1" required />
+          </div>
+          <div class="form-group">
+            <label for="f-priority">Priority</label>
+            <select id="f-priority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="f-notes">Notes</label>
+          <textarea id="f-notes" rows="2" placeholder="Optional notes…"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="f-tags">Tags <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="f-tags" placeholder="work, meeting, personal" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-ghost" id="addCancelBtn">Cancel</button>
+          <button type="submit" class="btn-primary">Schedule Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Edit Task Modal ──────────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="editModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>✏️ Edit Task</h2>
+        <button class="modal-close" id="editModalClose">✕</button>
+      </div>
+      <form id="editTaskForm" novalidate>
+        <input type="hidden" id="e-id" />
+        <div class="form-group">
+          <label for="e-title">Title <span class="req">*</span></label>
+          <input type="text" id="e-title" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-date">Date <span class="req">*</span></label>
+            <input type="date" id="e-date" required />
+          </div>
+          <div class="form-group">
+            <label for="e-time">Start time <span class="req">*</span></label>
+            <input type="time" id="e-time" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="e-duration">Duration (min) <span class="req">*</span></label>
+            <input type="number" id="e-duration" min="1" required />
+          </div>
+          <div class="form-group">
+            <label for="e-priority">Priority</label>
+            <select id="e-priority">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="e-notes">Notes</label>
+          <textarea id="e-notes" rows="2" placeholder="Optional notes…"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="e-tags">Tags <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="e-tags" placeholder="work, meeting, personal" />
+        </div>
+
+        <!-- Clash warning shown when a time change clashes with another task -->
+        <div id="editClashWarning" class="edit-clash-warning hidden">
+          <div class="edit-clash-header" id="editClashHeader"></div>
+          <ul id="editClashList" class="clash-list"></ul>
+          <div class="suggestion-box" id="editSuggestionBox">
+            <span class="suggestion-label">💡 Next free slot:</span>
+            <strong id="editSuggestion"></strong>
+            <button type="button" class="btn-move" id="editMoveBtn">Move here</button>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-ghost" id="editCancelBtn">Cancel</button>
+          <button type="submit" class="btn-primary" id="editSaveBtn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Clash Resolution Modal ────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="clashModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>⚡ Scheduling Clash</h2>
+      </div>
+      <div class="modal-body">
+        <p class="clash-desc">This task conflicts with:</p>
+        <ul id="clashList" class="clash-list"></ul>
+        <div class="suggestion-box">
+          <span class="suggestion-label">💡 Next free slot:</span>
+          <strong id="clashSuggestion"></strong>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" id="clashCancelBtn">Cancel</button>
+        <button class="btn-warning" id="clashForceBtn">Keep original time</button>
+        <button class="btn-primary" id="clashResolveBtn">Move to free slot</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

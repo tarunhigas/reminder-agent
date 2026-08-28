@@ -1,0 +1,47 @@
+# Reminder Agent — Kiro Prompt Context
+
+## What this project is
+A smart schedule reminder agent. It lets you add tasks with a start time and duration,
+automatically detects scheduling clashes, suggests conflict-free time slots, and reminds
+you at the right moment so you act immediately — not just "eventually".
+
+## Project structure
+```
+src/
+  index.js          — CLI entry point and daemon runner
+  scheduler.js      — Clash detection + auto-rescheduling logic
+  reminder.js       — Reminder engine: cron jobs, urgency tiers
+  storage.js        — JSON-backed task persistence layer
+  task.js           — Task model and validation
+  utils/
+    time.js         — Time helpers (overlap check, formatting)
+    notify.js       — Desktop + terminal notification wrapper
+data/
+  tasks.json        — Local task database (gitignored)
+```
+
+## Key behaviors
+- Tasks have: title, date, startTime, duration (minutes), priority, tags
+- Clash = two tasks overlap in time window (configurable MIN_GAP_MINUTES buffer)
+- On clash: agent suggests the next free slot automatically
+- Reminder tiers:
+  1. Early warning  — REMINDER_LEAD_TIME_MINUTES before (default 15 min)
+  2. Urgent         — REMINDER_URGENT_MINUTES before (default 5 min)
+  3. Start now      — exactly at task time
+- Daemon mode: runs as background process, polls every minute via node-cron
+
+## Coding conventions
+- ESM modules (import/export), Node 18+
+- Async/await throughout, no callbacks
+- Config always read from process.env (loaded via dotenv)
+- All times stored as ISO 8601 strings in UTC, displayed in local timezone
+- Errors are logged, never silently swallowed
+
+## Commands
+```
+node src/index.js add          # interactive task creation
+node src/index.js list         # show upcoming tasks
+node src/index.js remove <id>  # delete a task
+node src/index.js daemon       # run reminder loop in background
+```
+---------------
