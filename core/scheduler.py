@@ -1,11 +1,12 @@
-"""Clash detection and free-slot finder."""
+"""Clash detection, free-slot finder, and recurrence spawner."""
 
 from __future__ import annotations
 
 import os
 from datetime import datetime, timezone, timedelta
+from dateutil.relativedelta import relativedelta
 
-from models.task import Task, TaskCreate
+from models.task import Task, TaskCreate, Recurrence
 from core.storage import load_tasks, add_task
 
 _GAP = lambda: int(os.getenv("MIN_GAP_MINUTES", "10"))
@@ -48,7 +49,6 @@ def find_next_free_slot(
         key=lambda t: t.start_time,
     )
 
-    # Walk through tasks and push candidate forward on each clash
     changed = True
     while changed:
         changed = False
@@ -58,32 +58,66 @@ def find_next_free_slot(
             cand_end    = candidate + dur
 
             if candidate < clash_end and cand_end > clash_start:
-                # Push past this task's end + gap
                 candidate = task.end_time + gap
                 remainder = candidate.minute % 5
                 if remainder:
                     candidate += timedelta(minutes=5 - remainder)
                 candidate = candidate.replace(second=0, microsecond=0)
                 changed = True
-                break  # restart scan
+                break
 
     return candidate
+
+
+def _next_recurrence_time(start_time: datetime, recurrence: Recurrence) -> datetime | None:
+    """Return the next occurrence datetime for a recurring task, or None if no recurrence."""
+    if recurrence == Recurrence.NONE:
+        return None
+    if recurrence == Recurrence.DAILY:
+        return start_time + timedelta(days=1)
+    if recurrence == Recurrence.WEEKLY:
+        return start_time + timedelta(weeks=1)
+    if recurrence == Recurrence.MONTHLY:
+        return start_time + relativedelta(months=1)
+    return None
+
+
+def spawn_next_occurrence(task: Task) -> Task | None:
+    """
+    If a task is recurring, create and persist its next occurrence.
+    Returns the new Task, or None if non-recurring.
+    """
+    next_time = _next_recurrence_time(task.start_time, task.recurrence)
+    if next_time is None:
+        return None
+
+    next_task = Task(
+        title=task.title,
+        start_time=next_time,
+        duration=task.duration,
+        priority=task.priority,
+        recurrence=task.recurrence,
+        notify_channels=task.notify_channels,
+        notes=task.notes,
+        tags=task.tags,
+    )
+    add_task(next_task)
+    return next_task
 
 
 def detect_clashes(payload: TaskCreate) -> tuple[list[Task], datetime | None]:
     """
     Check payload against all existing tasks.
     Returns (clashing_tasks, suggested_free_slot).
-    suggested_free_slot is None if no clashes.
     """
     existing = load_tasks()
 
-    # Build a temporary Task to get end_time
     candidate = Task(
         title=payload.title,
         start_time=payload.start_time,
         duration=payload.duration,
         priority=payload.priority,
+        recurrence=payload.recurrence,
         notes=payload.notes,
         tags=payload.tags,
     )
@@ -105,9 +139,7 @@ def detect_clashes(payload: TaskCreate) -> tuple[list[Task], datetime | None]:
 def schedule_task(payload: TaskCreate, auto_resolve: bool = False) -> tuple[Task | None, list[Task], datetime | None, bool]:
     """
     Create and persist a task, handling clashes.
-
     Returns (task, clashes, suggestion, resolved).
-    If clashes exist and auto_resolve=False, task=None and caller must decide.
     """
     clashes, suggestion = detect_clashes(payload)
 
@@ -121,6 +153,8 @@ def schedule_task(payload: TaskCreate, auto_resolve: bool = False) -> tuple[Task
         start_time=start,
         duration=payload.duration,
         priority=payload.priority,
+        recurrence=payload.recurrence,
+        notify_channels=payload.notify_channels,
         notes=payload.notes,
         tags=payload.tags,
     )
