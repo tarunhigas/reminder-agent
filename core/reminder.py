@@ -12,6 +12,7 @@ from typing import Iterator
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from core.storage import load_tasks, update_task
+from core.slack import notify_slack
 
 logger = logging.getLogger("reminder")
 
@@ -84,6 +85,24 @@ def _minutes_until(dt: datetime) -> float:
     return (dt - now).total_seconds() / 60
 
 
+def _dispatch(task, tier: str, title: str, message: str) -> None:
+    """
+    Send a reminder only to the channels this task opted into.
+    Channel values are strings: "desktop", "browser", "slack".
+    Falls back to desktop + browser if the task has none set.
+    """
+    channels = [str(c) for c in (task.notify_channels or ["desktop", "browser"])]
+    # Enum values may serialize as "NotifyChannel.DESKTOP" or "desktop" — normalise
+    channels = [c.split(".")[-1].lower() for c in channels]
+
+    if "desktop" in channels:
+        _desktop_notify(title, message)
+    if "browser" in channels:
+        _broadcast(tier, title, message, tier)
+    if "slack" in channels:
+        notify_slack(title, message, tier)
+
+
 def _tick() -> None:
     """Evaluate all tasks and fire reminders as needed. Called every minute."""
     try:
@@ -106,31 +125,32 @@ def _tick() -> None:
             logger.debug("Auto-completed overdue task: %s", task.title)
             continue
 
-        # Tier 1 — Early warning
-        if not task.reminded.early and _URGENT() < mins <= _LEAD():
-            msg = f"Starts in ~{int(mins)} min • {task.duration} min long"
-            logger.info("[EARLY] %s — %s", task.title, msg)
-            _desktop_notify(f"🕐 Upcoming: {task.title}", msg)
-            _broadcast("early", f"🕐 Upcoming: {task.title}", msg, "early")
+        # Tier 3 — Start now (task has started, up to its full duration in)
+        if not task.reminded.start and mins <= 0:
+            msg = f"Do it right now! Duration: {task.duration} min"
+            logger.info("[START NOW] %s — %s", task.title, msg)
+            _dispatch(task, "start", f"🚀 START NOW: {task.title}", msg)
+            # Mark all earlier tiers done too — no point firing them after start
+            task.reminded.start = True
+            task.reminded.urgent = True
             task.reminded.early = True
             changed = True
 
-        # Tier 2 — Urgent
-        elif not task.reminded.urgent and 0 < mins <= _URGENT():
-            msg = f"Only {int(mins)} minute(s) away — get ready NOW!"
+        # Tier 2 — Urgent (within URGENT minutes of start)
+        elif not task.reminded.urgent and mins <= _URGENT():
+            msg = f"Only {max(int(mins), 0)} minute(s) away — get ready NOW!"
             logger.info("[URGENT] %s — %s", task.title, msg)
-            _desktop_notify(f"⚠️  Starting soon: {task.title}", msg)
-            _broadcast("urgent", f"⚠️ Starting soon: {task.title}", msg, "urgent")
+            _dispatch(task, "urgent", f"⚠️ Starting soon: {task.title}", msg)
             task.reminded.urgent = True
+            task.reminded.early = True
             changed = True
 
-        # Tier 3 — Start now (within ±1 min of start)
-        elif not task.reminded.start and -1 <= mins <= 0:
-            msg = f"Do it right now! Duration: {task.duration} min"
-            logger.info("[START NOW] %s — %s", task.title, msg)
-            _desktop_notify(f"🚀 START NOW: {task.title}", msg)
-            _broadcast("start", f"🚀 START NOW: {task.title}", msg, "start")
-            task.reminded.start = True
+        # Tier 1 — Early warning (within LEAD minutes of start)
+        elif not task.reminded.early and mins <= _LEAD():
+            msg = f"Starts in ~{int(mins)} min • {task.duration} min long"
+            logger.info("[EARLY] %s — %s", task.title, msg)
+            _dispatch(task, "early", f"🕐 Upcoming: {task.title}", msg)
+            task.reminded.early = True
             changed = True
 
         if changed:

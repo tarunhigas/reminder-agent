@@ -15,6 +15,23 @@ class Priority(str, Enum):
     CRITICAL = "critical"
 
 
+class Recurrence(str, Enum):
+    NONE = "none"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
+class NotifyChannel(str, Enum):
+    DESKTOP = "desktop"
+    BROWSER = "browser"
+    SLACK = "slack"
+
+
+# Default channels used when a task doesn't specify any
+DEFAULT_CHANNELS = [NotifyChannel.DESKTOP, NotifyChannel.BROWSER]
+
+
 class ReminderState(BaseModel):
     early: bool = False
     urgent: bool = False
@@ -28,6 +45,8 @@ class Task(BaseModel):
     end_time: datetime            # computed: start_time + duration
     duration: int                 # minutes
     priority: Priority = Priority.MEDIUM
+    recurrence: Recurrence = Recurrence.NONE
+    notify_channels: list[NotifyChannel] = Field(default_factory=lambda: list(DEFAULT_CHANNELS))
     notes: str = ""
     tags: list[str] = []
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -57,9 +76,11 @@ class TaskCreate(BaseModel):
     start_time: datetime
     duration: int = Field(..., gt=0, le=1440, description="Duration in minutes (1–1440)")
     priority: Priority = Priority.MEDIUM
+    recurrence: Recurrence = Recurrence.NONE
+    notify_channels: list[NotifyChannel] = Field(default_factory=lambda: list(DEFAULT_CHANNELS))
     notes: str = ""
     tags: list[str] = []
-    auto_resolve: bool = False    # if True, auto-move to free slot on clash
+    auto_resolve: bool = False
 
     @model_validator(mode="after")
     def start_must_be_future(self) -> "TaskCreate":
@@ -79,5 +100,7 @@ class TaskPatch(BaseModel):
     duration: Optional[int] = None
     notes: Optional[str] = None
     priority: Optional[Priority] = None
+    recurrence: Optional[Recurrence] = None
+    notify_channels: Optional[list[NotifyChannel]] = None
     tags: Optional[list[str]] = None
     completed: Optional[bool] = None

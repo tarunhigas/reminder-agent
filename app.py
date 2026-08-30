@@ -26,8 +26,10 @@ from core.storage import (
     load_tasks, get_upcoming_tasks, find_task_by_id,
     add_task, remove_task, update_task,
 )
-from core.scheduler import detect_clashes, schedule_task, audit_schedule
+from core.scheduler import detect_clashes, schedule_task, audit_schedule, spawn_next_occurrence
 from core.reminder import start_reminder_daemon, stop_reminder_daemon, subscribe, sse_stream
+from core.nlp import parse_task_text
+from core.slack import send_test_message, slack_enabled
 
 # ── Logging ───────────────────────────────────────────────────────────
 log_level = logging.DEBUG if os.getenv("LOG_LEVEL", "info") == "debug" else logging.INFO
@@ -170,12 +172,20 @@ async def patch_task(task_id: str, patch: TaskPatch) -> dict:
             from datetime import datetime as _dt
             st = _dt.fromisoformat(st)
         data["end_time"] = st + timedelta(minutes=int(dur))
-        # Reset reminder flags so the new time triggers fresh reminders
         data["reminded"] = {"early": False, "urgent": False, "start": False}
 
     updated = Task.model_validate(data)
     update_task(updated)
-    return {"task": updated.model_dump(mode="json")}
+
+    # If just marked complete and recurring → spawn next occurrence
+    next_task = None
+    if patch.completed is True and updated.recurrence != "none":
+        next_task = spawn_next_occurrence(updated)
+
+    return {
+        "task": updated.model_dump(mode="json"),
+        "next_occurrence": next_task.model_dump(mode="json") if next_task else None,
+    }
 
 
 @app.get("/api/tasks/{task_id}/clash-check")
@@ -244,6 +254,33 @@ async def delete_task(task_id: str) -> dict:
     if not removed:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True}
+
+
+@app.post("/api/parse")
+async def parse_natural_language(body: dict) -> dict:
+    """
+    Parse a plain-English string into structured task fields.
+    Body: { "text": "Remind me to submit report tomorrow at 5pm for 30 minutes" }
+    """
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text field is required")
+    result = parse_task_text(text)
+    return result
+
+
+@app.post("/api/slack/test")
+async def slack_test() -> dict:
+    """Send a test message to the configured Slack webhook."""
+    if not slack_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail="Slack not configured. Set SLACK_NOTIFICATIONS=true and SLACK_WEBHOOK_URL in .env",
+        )
+    ok = send_test_message()
+    if not ok:
+        raise HTTPException(status_code=502, detail="Failed to reach Slack webhook")
+    return {"success": True, "message": "Test message sent to Slack"}
 
 
 @app.get("/api/audit")

@@ -21,7 +21,7 @@
         <button class="nav-btn" data-view="audit">🔍 Audit</button>
       </nav>
       <div class="sidebar-footer">
-        <div class="status-dot" id="daemonStatus" title="Reminder daemon status"></div>
+        <div class="status-dot" id="daemonStatus"></div>
         <span id="daemonLabel">Daemon active</span>
       </div>
     </aside>
@@ -31,26 +31,129 @@
 
       <!-- Header -->
       <header class="topbar">
-        <h1 id="viewTitle">Upcoming Tasks</h1>
-        <button class="btn-primary" id="addTaskBtn">+ Add Task</button>
+        <div class="topbar-left">
+          <h1 id="viewTitle">Upcoming</h1>
+          <span class="topbar-date" id="topbarDate"></span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn-agent" id="askAgentBtn">💬 Ask Agent</button>
+          <button class="btn-primary" id="addTaskBtn">+ Add Task</button>
+        </div>
       </header>
 
       <!-- Clash banner -->
       <div class="clash-banner hidden" id="clashBanner">
-        <span class="clash-icon">⚡</span>
+        <span>⚡</span>
         <span id="clashBannerText"></span>
         <button class="banner-close" id="clashBannerClose">✕</button>
       </div>
 
       <!-- Task list -->
       <section class="task-list" id="taskList">
-        <div class="loading">Loading tasks…</div>
+        <div class="loading">Loading…</div>
       </section>
 
     </main>
   </div>
 
-  <!-- ── Add Task Modal ─────────────────────────────────────────── -->
+  <!-- ── Ask Agent Modal ─────────────────────────────────────── -->
+  <div class="modal-overlay hidden" id="agentModal">
+    <div class="modal agent-modal">
+      <div class="modal-header">
+        <div class="agent-modal-title">
+          <span class="agent-icon">💬</span>
+          <h2>Ask Agent</h2>
+        </div>
+        <button class="modal-close" id="agentModalClose">✕</button>
+      </div>
+
+      <!-- Input row -->
+      <div class="agent-input-row">
+        <input
+          type="text"
+          id="agentInput"
+          class="agent-input"
+          placeholder="e.g. Remind me to submit assignment tomorrow at 7 PM for 1 hour"
+          autocomplete="off"
+        />
+        <button class="btn-primary" id="agentParseBtn">Parse →</button>
+      </div>
+
+      <!-- Example prompts -->
+      <div class="agent-examples" id="agentExamples">
+        <p class="agent-examples-label">Try these:</p>
+        <div class="agent-chips">
+          <button class="agent-chip">Study Python every Monday at 7 PM for 2 hours</button>
+          <button class="agent-chip">Team standup tomorrow at 10am, 30 min</button>
+          <button class="agent-chip">Submit report in 3 days at 5 PM, high priority</button>
+          <button class="agent-chip">Call John today at 3:30 PM for 20 minutes</button>
+        </div>
+      </div>
+
+      <!-- Parsed preview card -->
+      <div class="agent-preview hidden" id="agentPreview">
+        <div class="agent-preview-header">
+          <span id="agentConfidence"></span>
+          <span class="agent-preview-label">Parsed task — edit if needed</span>
+        </div>
+        <div class="agent-preview-body">
+          <div class="form-group">
+            <label for="ap-title">Title</label>
+            <input type="text" id="ap-title" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ap-date">Date</label>
+              <input type="date" id="ap-date" />
+            </div>
+            <div class="form-group">
+              <label for="ap-time">Time</label>
+              <input type="time" id="ap-time" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ap-duration">Duration (min)</label>
+              <input type="number" id="ap-duration" min="1" />
+            </div>
+            <div class="form-group">
+              <label for="ap-priority">Priority</label>
+              <select id="ap-priority">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Repeat</label>
+            <div class="recurrence-options">
+              <label class="rec-opt"><input type="radio" name="ap-recurrence" value="none" checked /><span>Does not repeat</span></label>
+              <label class="rec-opt"><input type="radio" name="ap-recurrence" value="daily" /><span>Daily</span></label>
+              <label class="rec-opt"><input type="radio" name="ap-recurrence" value="weekly" /><span>Weekly</span></label>
+              <label class="rec-opt"><input type="radio" name="ap-recurrence" value="monthly" /><span>Monthly</span></label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notify via</label>
+            <div class="channel-options">
+              <label class="chan-opt"><input type="checkbox" name="ap-channel" value="desktop" checked /><span>🖥 Desktop</span></label>
+              <label class="chan-opt"><input type="checkbox" name="ap-channel" value="browser" checked /><span>🌐 Browser</span></label>
+              <label class="chan-opt"><input type="checkbox" name="ap-channel" value="slack" /><span>💬 Slack</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-ghost" id="agentCancelBtn">Cancel</button>
+          <button type="button" class="btn-primary" id="agentConfirmBtn">✓ Schedule Task</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Add Task Modal ───────────────────────────────────────── -->
   <div class="modal-overlay hidden" id="addModal">
     <div class="modal">
       <div class="modal-header">
@@ -60,7 +163,7 @@
       <form id="addTaskForm" novalidate>
         <div class="form-group">
           <label for="f-title">Title <span class="req">*</span></label>
-          <input type="text" id="f-title" placeholder="e.g. Team standup" required />
+          <input type="text" id="f-title" placeholder="e.g. Submit assignment" required />
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -87,13 +190,35 @@
             </select>
           </div>
         </div>
+
+        <!-- Recurrence -->
+        <div class="form-group">
+          <label>Repeat</label>
+          <div class="recurrence-options">
+            <label class="rec-opt"><input type="radio" name="f-recurrence" value="none" checked /><span>Does not repeat</span></label>
+            <label class="rec-opt"><input type="radio" name="f-recurrence" value="daily" /><span>Daily</span></label>
+            <label class="rec-opt"><input type="radio" name="f-recurrence" value="weekly" /><span>Weekly</span></label>
+            <label class="rec-opt"><input type="radio" name="f-recurrence" value="monthly" /><span>Monthly</span></label>
+          </div>
+        </div>
+
+        <!-- Notify via -->
+        <div class="form-group">
+          <label>Notify via</label>
+          <div class="channel-options">
+            <label class="chan-opt"><input type="checkbox" name="f-channel" value="desktop" checked /><span>🖥 Desktop</span></label>
+            <label class="chan-opt"><input type="checkbox" name="f-channel" value="browser" checked /><span>🌐 Browser</span></label>
+            <label class="chan-opt"><input type="checkbox" name="f-channel" value="slack" /><span>💬 Slack</span></label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="f-notes">Notes</label>
           <textarea id="f-notes" rows="2" placeholder="Optional notes…"></textarea>
         </div>
         <div class="form-group">
           <label for="f-tags">Tags <span class="hint">(comma-separated)</span></label>
-          <input type="text" id="f-tags" placeholder="work, meeting, personal" />
+          <input type="text" id="f-tags" placeholder="work, study, personal" />
         </div>
         <div class="form-actions">
           <button type="button" class="btn-ghost" id="addCancelBtn">Cancel</button>
@@ -141,20 +266,42 @@
             </select>
           </div>
         </div>
+
+        <!-- Recurrence -->
+        <div class="form-group">
+          <label>Repeat</label>
+          <div class="recurrence-options">
+            <label class="rec-opt"><input type="radio" name="e-recurrence" value="none" /><span>Does not repeat</span></label>
+            <label class="rec-opt"><input type="radio" name="e-recurrence" value="daily" /><span>Daily</span></label>
+            <label class="rec-opt"><input type="radio" name="e-recurrence" value="weekly" /><span>Weekly</span></label>
+            <label class="rec-opt"><input type="radio" name="e-recurrence" value="monthly" /><span>Monthly</span></label>
+          </div>
+        </div>
+
+        <!-- Notify via -->
+        <div class="form-group">
+          <label>Notify via</label>
+          <div class="channel-options">
+            <label class="chan-opt"><input type="checkbox" name="e-channel" value="desktop" /><span>🖥 Desktop</span></label>
+            <label class="chan-opt"><input type="checkbox" name="e-channel" value="browser" /><span>🌐 Browser</span></label>
+            <label class="chan-opt"><input type="checkbox" name="e-channel" value="slack" /><span>💬 Slack</span></label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="e-notes">Notes</label>
           <textarea id="e-notes" rows="2" placeholder="Optional notes…"></textarea>
         </div>
         <div class="form-group">
           <label for="e-tags">Tags <span class="hint">(comma-separated)</span></label>
-          <input type="text" id="e-tags" placeholder="work, meeting, personal" />
+          <input type="text" id="e-tags" placeholder="work, study, personal" />
         </div>
 
-        <!-- Clash warning shown when a time change clashes with another task -->
+        <!-- Clash warning -->
         <div id="editClashWarning" class="edit-clash-warning hidden">
           <div class="edit-clash-header" id="editClashHeader"></div>
           <ul id="editClashList" class="clash-list"></ul>
-          <div class="suggestion-box" id="editSuggestionBox">
+          <div class="suggestion-box">
             <span class="suggestion-label">💡 Next free slot:</span>
             <strong id="editSuggestion"></strong>
             <button type="button" class="btn-move" id="editMoveBtn">Move here</button>
@@ -169,7 +316,7 @@
     </div>
   </div>
 
-  <!-- ── Clash Resolution Modal ────────────────────────────────── -->
+  <!-- ── Clash Resolution Modal ───────────────────────────────── -->
   <div class="modal-overlay hidden" id="clashModal">
     <div class="modal">
       <div class="modal-header">
