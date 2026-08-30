@@ -1,29 +1,36 @@
-# Dependencies
-node_modules/
-
-# Environment variables — never commit secrets
+# ── Environment variables — never commit secrets ──
 .env
 .env.local
 .env.*.local
 
-# Local task database (personal data)
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ── Local task database (personal data) ──
 data/
 
-# Logs
+# ── Logs ──
 logs/
 *.log
-npm-debug.log*
 
-# OS artifacts
+# ── OS artifacts ──
 .DS_Store
 Thumbs.db
 
-# Editor
+# ── Editor ──
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Build output
-dist/
-build/
