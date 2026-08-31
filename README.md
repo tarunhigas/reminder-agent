@@ -65,7 +65,7 @@ Reminder fired in 3 tiers, to the channels you picked:
 - **Edit tasks** — change title, time, duration, priority, recurrence, channels, notes, or tags at any time
 - **Dashboard** — tasks grouped by Today / Tomorrow / later, with live countdowns
 - **Schedule audit** — full clash report for all upcoming tasks
-- **Dark UI** — clean dashboard served at `http://localhost:3000`
+- **Dark UI** — clean dashboard served on the port set in `.env` (see `PORT`)
 
 ---
 
@@ -88,9 +88,13 @@ cp .env.sample .env
 python app.py
 ```
 
-Open your browser at **http://localhost:3000** (or whatever `PORT` you set).
+Open your browser at **http://localhost:<PORT>** — the `PORT` value comes from your
+`.env` (the sample uses `3002`). The terminal prints the exact URL on startup.
 
 When the page loads, click **Allow** when the browser asks for notification permission.
+
+> **Tip:** if you see `address already in use`, the server is already running on that
+> port. Free it with `fuser -k <PORT>/tcp` (Linux) before starting again.
 
 ---
 
@@ -100,7 +104,7 @@ When the page loads, click **Allow** when the browser asks for notification perm
 > Copy `.env.sample` → `.env` and fill in your values.
 
 ```env
-PORT=3000                        # Web server port
+PORT=3002                        # Web server port (open http://localhost:<PORT>)
 REMINDER_LEAD_TIME_MINUTES=15    # First reminder: X min before task
 REMINDER_URGENT_MINUTES=5        # Second reminder: X min before task
 MIN_GAP_MINUTES=10               # Minimum buffer between tasks
@@ -117,13 +121,16 @@ LOG_LEVEL=info                   # info | debug
 2. Enable **Incoming Webhooks**, then **Add New Webhook to Workspace** and pick a channel
 3. Copy the webhook URL (looks like `https://hooks.slack.com/services/T.../B.../xxxx`)
 4. In `.env`, set `SLACK_NOTIFICATIONS=true` and paste the URL into `SLACK_WEBHOOK_URL`
-5. Restart the server, then test it:
+5. Restart the server, then test it (use your configured `PORT`):
    ```bash
-   curl -X POST http://localhost:3000/api/slack/test
+   curl -X POST http://localhost:3002/api/slack/test
    ```
    A "🔔 Reminder Agent connected" message should appear in your chosen channel.
 
 Reminders only go to Slack for tasks where you tick the **💬 Slack** channel in the form.
+
+> **Note:** the webhook posts to whichever channel you selected when creating it
+> (e.g. `#all-reminder-agent-testing`) — check that channel, not the app's DM.
 
 ---
 
@@ -142,7 +149,7 @@ Reminders only go to Slack for tasks where you tick the **💬 Slack** channel i
 | `GET` | `/api/audit` | Full schedule clash report |
 | `GET` | `/api/events` | SSE stream for live reminder notifications |
 
-Interactive docs available at **http://localhost:3000/docs**
+Interactive docs available at **http://localhost:<PORT>/docs**
 
 ---
 
